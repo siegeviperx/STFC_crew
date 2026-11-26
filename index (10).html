@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STFC Crew Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Antonio:wght@500;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: terse ops console for a working player, accurate over flashy
+IDEA: a starship ops board: crew roster, rep ledger, tech locker
+PICTURE: crew cards with bridge slots up top; the rep tab leads with a large live ETA readout
+COLOUR and TYPE: deep space field, Federation blue, Klingon coral, Romulan green as faction keys; Antonio figures, Barlow text
+LAYOUT: blue header band with tab row, filters, card grid; rep tab two columns then ledger */
+:root{color-scheme:dark;--bg:#0a1428;--panel:#101e38;--panel2:#152846;--line:#243a63;--ink:#e8eefb;--mute:#a3b4d3;--fed:#4b9bff;--fed2:#a9ccff;--kli:#ff6b4a;--rom:#3ecf8e;--ok:#5fd3a6;--warn:#ffb3a1}
+:root[data-theme=light],:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Barlow,system-ui,sans-serif;overflow-x:clip}
+html{scroll-padding-top:72px}
+.band{padding:clamp(20px,3vw,40px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+h1,h2,.big{font-family:Antonio,Impact,sans-serif;font-weight:700}
+h1{font-size:clamp(32px,5vw,48px);line-height:1.05;margin:0 0 6px;text-wrap:balance}
+h2{font-size:24px;margin:0 0 12px;font-weight:500}
+h3{font-size:17px;margin:0 0 6px}
+p{margin:0 0 10px;max-width:72ch}
+.sub,.hint{color:var(--mute)}.hint{font-size:13px}
+header.band{background:var(--fed);color:#06142c;padding-bottom:0}
+header .sub{color:#0d2b57}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-top:18px}
+nav.tabs a{padding:12px 18px;border-radius:10px 10px 0 0;color:#06142c;text-decoration:none;font-weight:600;min-height:44px}
+nav.tabs a.on{background:var(--bg);color:var(--ink)}
+.view{display:none}.view.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+@media(max-width:860px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--mute);border-radius:99px;padding:6px 14px;min-height:40px;font:inherit;font-size:14px;cursor:pointer}
+.chip.on{background:var(--fed2);color:#06142c;border-color:var(--fed2);font-weight:600}
+input,select,button{font:inherit;font-size:16px;color:var(--ink);background:#0b1730;border:1px solid var(--line);border-radius:8px;min-height:44px;padding:8px 10px}
+input[type=checkbox]{min-height:0;width:22px;height:22px;accent-color:var(--fed)}
+:focus-visible{outline:2px solid var(--fed2);outline-offset:2px}
+button{cursor:pointer;background:var(--panel2)}
+.alert{border:1px solid var(--kli);background:#2a1418;color:var(--warn);border-radius:10px;padding:12px 14px;font-size:14px;margin:0 0 14px}
+.crew h3{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.badges{display:flex;gap:4px;flex-wrap:wrap;flex:none}
+.b{font-size:13px;padding:1px 8px;border-radius:99px;font-weight:600;white-space:nowrap}
+.b-meta{background:#0f3b2c;color:var(--ok)}.b-new{background:#1d2f63;color:var(--fed2)}.b-com{background:#3a2e10;color:#ffd27a}.b-cap{background:#3a1a14;color:var(--warn)}.b-leg{background:#22304a;color:var(--mute)}
+.loop{font-size:13px;color:var(--mute);margin-bottom:8px}
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+.slot{background:var(--panel2);border-radius:8px;padding:7px 9px}
+.slot span{display:block;font-size:13px;color:var(--mute)}
+.slot b{font-weight:600;font-size:15px;line-height:1.3;display:block;color:var(--fed2)}
+.slot b.capd{color:var(--warn)}
+.crew p{font-size:15px}
+.bdh{font-size:13px;color:var(--mute);margin:2px 0 6px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.bdh b{color:var(--ink);font-weight:600}
+ol.bd{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+ol.bd li{display:flex;gap:6px;align-items:baseline;border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:14px;background:var(--panel2)}
+ol.bd li i{font-style:normal;font-family:Antonio,sans-serif;font-weight:700;color:var(--mute)}
+ol.bd li.must{background:#16336a;border-color:var(--fed)}
+ol.bd li.must i{color:var(--fed2)}
+ol.bd li.inf{border-style:dashed}
+ol.bd li small{color:var(--mute);font-size:13px}
+ol.bd li.none{color:var(--mute)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--mute);margin:0 0 12px;align-items:center}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.legend em{display:inline-block;width:22px;height:14px;border-radius:4px;border:1px solid var(--line);background:var(--panel2)}
+.legend em.m{background:#16336a;border-color:var(--fed)}.legend em.d{border-style:dashed}
+details{border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
+summary{cursor:pointer;color:var(--fed2);font-size:14px;min-height:32px}
+dl{display:grid;grid-template-columns:7em minmax(0,1fr);gap:4px 10px;margin:8px 0 0;font-size:14px}
+dt{color:var(--mute)}dd{margin:0}
+.big{font-size:clamp(56px,11vw,100px);line-height:1;color:var(--fed2)}
+.big small{font-size:.3em;color:var(--mute);margin-left:8px;font-family:Barlow,sans-serif;font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.kpi{background:var(--panel2);border-radius:8px;padding:10px 12px}
+.kpi b{display:block;font-family:Antonio,sans-serif;font-size:26px;white-space:nowrap}
+.kpi span{font-size:13px;color:var(--mute)}
+.bar{display:grid;grid-template-columns:minmax(0,12em) minmax(0,1fr) 4em;gap:10px;align-items:center;font-size:14px;margin:6px 0}
+.bar i{display:block;height:12px;border-radius:6px;background:var(--fed)}.bar i.k{background:var(--kli)}
+.bar em{font-style:normal;text-align:right;color:var(--mute)}
+.next{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.next b{color:var(--ok)}
+label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.chk{display:flex;gap:10px;align-items:center;margin-top:14px;color:var(--ink)}
+.fac{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.fac button{font-weight:600;border-width:2px}
+.fac button[data-f=fed].on{background:var(--fed);border-color:var(--fed);color:#06142c}
+.fac button[data-f=kli].on{background:var(--kli);border-color:var(--kli);color:#2a0b04}
+.fac button[data-f=rom].on{background:var(--rom);border-color:var(--rom);color:#04291a}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-weight:500;color:var(--mute);font-size:13px;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+td input:not([type=checkbox]),td select{width:100%}
+td.num{text-align:right;white-space:nowrap;font-weight:600}
+td small{display:block;color:var(--mute);font-size:13px;line-height:1.4}
+.tag{display:inline-block;font-size:13px;padding:0 7px;border-radius:99px;background:#3a1a14;color:var(--warn);margin-left:6px}
+.tag.inf{background:#3a2e10;color:#ffd27a}
+ul.list{margin:0;padding-left:18px}ul.list li{margin:6px 0}
+.warn{color:var(--warn)}a{color:var(--fed2)}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.scroll{overflow-x:auto}
+.empty{color:var(--mute);padding:24px 0}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mute)}.stack td:empty{display:none}.kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.bar{grid-template-columns:minmax(0,8em) minmax(0,1fr) 3.5em}nav.tabs a{padding:10px 12px}}
+@media(prefers-reduced-motion:no-preference){.bar i{transition:width .3s ease}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="band"><div class="wrap">
+<h1>STFC crew dashboard, November 2026</h1>
+<p class="sub">Season 1 Episode 1: Outbreak Battlelines. Crews, loadouts and an FKR rep planner for Ops 71 and up. Verify values in game after each patch.</p>
+<nav class="tabs" id="tabs">
+  <a href="#crews">Crews</a><a href="#rep">Rep planner</a><a href="#tech">Tech and artifacts</a><a href="#changes">What changed</a>
+</nav>
+</div></header>
+
+<section class="view band" id="v-crews"><div class="wrap">
+  <div class="alert"><b>G7 caps, unchanged since October 2025:</b> SC Pike, Moreau, TNG Picard, Harrison, both Harry Mudds, Eurydice, McCoy and Gaila are capped against hostiles above level 71. PvP and content at 70 or below are unaffected. Polaron hostiles only take Infusion damage, so classic hostile crews do little to them.</div>
+  <div class="filters" id="loopF"></div>
+  <div class="filters" id="statF"></div>
+  <input id="q" type="search" placeholder="Search officer, ship, hostile" aria-label="Search crews" style="width:100%;margin-bottom:14px">
+  <div class="legend"><span>Below decks run left to right by priority:</span><span><em class="m"></em>Must have</span><span><em></em>From a guide or patch notes</span><span><em class="d"></em>My pick from known abilities, not a tested guide</span><span>Fill any empty slots by the stat order shown.</span></div>
+  <p class="hint" id="count"></p>
+  <div class="cards" id="cards"></div>
+</div></section>
+
+<section class="view band" id="v-rep"><div class="wrap">
+  <div class="fac" id="fac"><button data-f="fed">Federation</button><button data-f="kli">Klingon</button><button data-f="rom">Romulan</button></div>
+  <div class="grid2">
+    <section class="card" aria-live="polite">
+      <div class="big" id="days">—<small>days</small></div>
+      <p class="sub" id="eta"></p>
+      <div class="kpis">
+        <div class="kpi"><b id="perDay">—</b><span>rep per day</span></div>
+        <div class="kpi"><b id="perWeek">—</b><span>rep per week</span></div>
+        <div class="kpi"><b id="kills">—</b><span>kills per day</span></div>
+      </div>
+      <div id="bars"></div>
+      <div class="next" id="next"></div>
+    </section>
+    <section class="card">
+      <h2 id="setupH">Setup</h2>
+      <label for="goal">Rep still needed for this faction</label>
+      <input id="goal" inputmode="decimal" placeholder="2.1T">
+      <div class="hint">Use K, M, B or T. 2.1T is 2,100,000,000,000.</div>
+      <div class="row2">
+        <div><label for="stad">Stadium level</label><select id="stad"></select></div>
+        <div><label for="stadO">Stadium % override</label><input id="stadO" inputmode="decimal" placeholder="auto"></div>
+      </div>
+      <div class="hint" id="stadHint"></div>
+      <label class="chk"><input type="checkbox" id="elig"> Grinding on an FKR ship or the U.S.S. Vengeance</label>
+      <div class="hint">The Stadium bonus only counts on those hulls.</div>
+      <div class="row2">
+        <div><label for="other">Other hostile rep bonus %</label><input id="other" inputmode="decimal"></div>
+        <div><label for="stack">Bonuses combine</label><select id="stack"><option value="add">Add together</option><option value="mul">Multiply</option></select></div>
+      </div>
+      <label for="cap">Daily hostile kill cap</label>
+      <input id="cap" type="number" min="0" step="1">
+      <div class="hint">2,500 is from an October 2025 report. Check yours in game.</div>
+    </section>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h2>Rep sources</h2>
+    <p class="hint">Sample values, not real data. Scopely does not publish rep per kill, so replace them with numbers from your battle logs and refinery screens. Each faction keeps its own list.</p>
+    <div class="scroll"><table class="stack">
+      <thead><tr><th>On</th><th>Source</th><th>Rep each</th><th>Count</th><th>Per</th><th>Bonuses</th><th>Rep a day</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="tools"><button id="add">Add a source</button><button id="reset">Reset this faction to samples</button></div>
+  </div>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="card">
+      <h2>Hit a date</h2>
+      <div class="row2">
+        <div><label for="tdate">Finish by</label><input id="tdate" type="date"></div>
+        <div><label for="prim">Extra kills from</label><select id="prim"></select></div>
+      </div>
+      <p id="solve" style="margin-top:14px"></p>
+    </div>
+    <div class="card">
+      <h2>Calibrate rep per kill</h2>
+      <p class="hint">Note your rep, kill some hostiles, note it again. Your current bonuses are taken out to give the base value.</p>
+      <div class="row2">
+        <div><label for="cGain">Rep gained</label><input id="cGain" inputmode="decimal" placeholder="25B"></div>
+        <div><label for="cKills">Kills</label><input id="cKills" type="number" min="1" step="1" placeholder="50"></div>
+      </div>
+      <label for="cRow">Apply to</label><select id="cRow"></select>
+      <p id="cOut" style="margin-top:12px"></p>
+      <button id="cApply">Use this value</button>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:18px">
+    <div class="card"><h2>What to do next</h2><ul class="list" id="recs"></ul></div>
+    <div class="card"><h2 id="routeH">Routing rules</h2><ul class="list" id="route"></ul>
+      <p class="hint" style="margin-top:10px">"Inferred" means the official Help Center states the Federation routes only; the Klingon and Romulan routes follow the same pattern but are not confirmed.</p></div>
+  </div>
+</div></section>
+
+<section class="view band" id="v-tech"><div class="wrap">
+  <h2>Forbidden, Chaos and Prototype tech</h2>
+  <div class="cards" id="techCards"></div>
+  <h2 style="margin-top:28px">Artifacts to slot</h2>
+  <div class="cards" id="artCards"></div>
+  <h2 style="margin-top:28px">Galactic Anomalies</h2>
+  <div class="card"><ul class="list" id="anom"></ul></div>
+</div></section>
+
+<section class="view band" id="v-changes"><div class="wrap grid2">
+  <div class="card"><h2>What changed since April 2026</h2><ul class="list" id="chg"></ul></div>
+  <div class="card"><h2>Officers released in 2026</h2>
+    <div class="scroll"><table class="stack"><thead><tr><th>Release</th><th>Officers</th><th>Use</th></tr></thead><tbody id="offs"></tbody></table></div>
+    <p class="hint" style="margin-top:12px">Sources: <a href="https://startrekfleetcommand.com/news/patch-notes-season-1-episode-1-outbreak-battlelines/">Battlelines patch notes</a> · <a href="https://startrekfleetcommand.com/news/outbreak-battlelines-the-planetfall-crew/">Planetfall crew</a> · <a href="https://scopely.helpshift.com/hc/en/19-star-trek-fleet-command/faq/9703-season-1-episode-1-battlelines/">Help Center</a> · <a href="https://stfc.phd/">stfc.phd</a> · <a href="https://hackmd.io/@hawks/crews">Hawks crews</a>. Researched November 25, 2026.</p>
+  </div>
+</div></section>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let store;try{store=JSON.parse(localStorage.getItem('stfc-dash-v2'))||{}}catch(e){store={}}
+const save=()=>{try{localStorage.setItem('stfc-dash-v2',JSON.stringify(store))}catch(e){}};
+
+/* ---------- Crews ---------- */
+const LOOPS={polaron:'Polaron / Planetfall',g7:'G7 hostiles',outpost:'Outposts',armada:'Armadas',pvp:'PvP',station:'Station',specific:'Specific hostiles',mining:'Mining / Territory',wave:'Wave Defense',surge:'Surge'};
+const STAT={meta:['b-meta','Meta'],new:['b-new','New'],com:['b-com','Community'],cap:['b-cap','Capped 71+'],leg:['b-leg','Legacy']};
+const C=(name,loop,st,c,o1,o2,note,bd,ship,tech,src,capd)=>({name,loop,st,c,o1,o2,note,bd,ship,tech,src,capd:capd||''});
+const CREWS=[
+C('Full Planetfall','polaron',['meta','new'],'Planetfall Kirk','Planetfall Ortegas','Planetfall Scotty','Kirk doubles the Polaron Mitigation Ortegas gives; Scotty spikes Kirk\'s Infusion Capacitors. Best line on paper, not yet tested by a named source.','Planetfall Uhura (Polaron Ions +100 to 500%)','FKR ship or U.S.S. Vengeance only','Infusion Modulator (Prototype FT)','Inferred from Scopely ability text, Nov 23 2026'),
+C('Kirk + Sam Kirk','polaron',['com','new'],'Planetfall Kirk','Planetfall Uhura','SNW Sam Kirk','Community crew from launch week.','Polaron Ion and mitigation officers','FKR ship or Vengeance','Infusion Modulator','stfc.phd, Nov 2026'),
+C('Pike + Planetfall Kirk','polaron',['com'],'Pike','Planetfall Kirk','Planetfall Uhura','Source does not say which Pike. SC Pike is capped above 71, so use SNW Pike or keep this to Polaron hostiles 70 and below.','','FKR ship or Vengeance','Infusion Modulator','stfc.phd, Nov 2026','c'),
+C('Before you have PF Kirk','polaron',['com'],'Pike','SNW Sam Kirk','Planetfall Uhura','Starter line. Same Pike caveat.','','FKR ship or Vengeance','Infusion Modulator','stfc.phd, Nov 2026','c'),
+C('Polaron loot','polaron',['com'],'ENT-E Picard','Rachel Garrett','Planetfall Uhura','Loot over speed.','','FKR ship or Vengeance','Infusion Modulator','stfc.phd, Nov 2026'),
+C('Faction-specific TNG','polaron',['com','cap'],'TNG Picard','Geordi (vs Klingon) / Troi (vs Romulan) / Riker (vs Federation)','Planetfall Uhura','TNG Picard is capped above 71. Use on 70 and below only.','','FKR ship or Vengeance','Infusion Modulator','stfc.phd, Nov 2026','c'),
+C('Janeway survival','g7',['meta'],'Janeway','Seska','Suder','Uncapped. Good on standard G7 hostiles and Breen. Does not work on Polaron hostiles.','PIC Hugh (stacks with Suder healing)','U.S.S. Vengeance or G7 ship','Thought Maker CT, Metreon Cascade FT','Scopely Feb 2025; 1337wiki tier list Jun 2026'),
+C('Janeway mitigation','g7',['meta'],'Janeway','The Doctor','Seska','Longer fights, more mitigation.','PIC Hugh, Chapel','Vengeance','Thought Maker CT','1337wiki, Jun 2026'),
+C('Chang crit','g7',['meta'],'Chang','Suder','Seska','Faster kills. Listed for Breen; Vengeance already ignores Breen shields, so skip shield-pierce slots.','PIC Hugh or Torres','Vengeance or Battleship','Entropic Warhead CT','stfc.club (undated)'),
+C('SNW triangle','g7',['leg'],'SNW Pike','SNW Spock / Uhura / Ortegas','Seska or Suder','SNW Pike is not on the cap list, unlike SC Pike. Spock vs Interceptors, Uhura vs Battleships, Ortegas vs Explorers.','','Match the combat triangle','Thought Maker CT','Scopely Year of Hell spotlight (pre-2026)'),
+C('Rep slot reminder','g7',['leg'],'Your G7 crew','Your G7 crew','Harry Kim (rep)','Update 94 swapped Neelix and Harry Kim: Neelix is now Morale, Kim is Burning. Recheck any rep preset before trusting it.','Alonzo Freeman; FC Kirk or Sloan; Exocomps','Any','','Hawks (undated); Scopely Aug 20 2026'),
+C('TMP Outpost crew','outpost',['meta'],'TMP Sulu','V\'ger Ilia','TMP Uhura','Sulu gives up to 8,000 Apex Barrier vs Outposts and Retaliation with synergy. Uhura opens with Hull Breach; Ilia ramps Isolytic Cascade. Standard hostile abilities do not work here.','FC Sisko (Tactician tree)','Any; Excelsior suits it','Neural Neutralizer; Kirk\'s Spectacles, Earl Grey Tea Cup, Benny\'s Typewriter','Scopely Feb 4 2026'),
+C('TMP on FKR or Vengeance','outpost',['meta','new'],'TMP Sulu','V\'ger Ilia','TMP Uhura','Same bridge plus the Battlelines outpost upgrades.','Planetfall Scotty (+2,500 to 25,000 Infusion Capacitors vs Outposts)','FKR ship or Vengeance','Silicon-based Parasites CT + Neural Neutralizer','Scopely Nov 12 and 23 2026'),
+C('Generic outpost fallback','outpost',['leg'],'Kirk / Khan / Gorkon','Spock / Nero / Kerla','Yuki Sulu / Harrison','Only generic officers trigger on Retaliation Attackers.','','Any','Neural Neutralizer','Talking Trek Nov 2025'),
+C('Open Armadas','armada',['meta'],'FCM Data','Zefram Cochrane','Mara Dalen','Official Open Armada crew. Data +200 to 400% shots, Cochrane +250% Isolytic Cascade, Dalen +1,000% Isolytic Defense vs group armadas.','Kim, Troi, Odo, Torres','Vengeance or G7 ship','Entropic Warhead CT','Scopely Mar 24 2026'),
+C('FKR armadas add-on','armada',['new'],'Your armada crew','Your armada crew','Your armada crew','Add Planetfall Ortegas below decks for +2,500 to 25,000 Infusion Capacitors vs FKR armadas.','Planetfall Ortegas','FKR ship or Vengeance','Infusion Modulator','Scopely Nov 23 2026'),
+C('Chainfire','armada',['leg'],'Chakotay','Seven of Nine','O\'Brien','Now secondary to FCM Data.','Kim, Troi, Odo, Torres, Neelix; FC Lorca, Sloan, Locutus or Seven','Any','Entropic Warhead CT','Hawks (undated)'),
+C('Damage and loot','armada',['leg'],'5 of 11','6 of 11','Khan','Solid all-rounder.','','Any','','Hawks (undated)'),
+C('Armada loot','armada',['leg'],'Tolra','Toli','5 of 11','Loot focus.','VOY Doctor or Byr','Any','','Hawks (undated)'),
+C('Krenim solo','armada',['leg','cap'],'SC Pike or TNG Picard','Tolra or TNG Beverly','DeMarco or Janeway','Pike and Picard capped above 71; check the armada level.','Anti-Static or Anti-Charged Exocomp, Neelix, Kim, Odo, PIC Hugh','U.S.S. Relativity','','Hawks (undated)','c'),
+C('Hierarch generalist','pvp',['meta'],'The Hierarch','T\'Ana','Honorguard Worf','Scopely says it outperforms Carol Freeman. July 2026 timing fix made it stronger.','Rose Harper (Iso Def on FKR/Vengeance), Toryn, Academy Doctor or Deidamia','Any','Q Cannon CT','Scopely Nov 5 2025; Update 93'),
+C('Freeman counter','pvp',['meta'],'Nog','The Hierarch','Rom','Cuts enemy crit chance up to 70%. Siege and crit lock.','','Any','Q Cannon CT','Scopely Nov 5 2025'),
+C('Carol Freeman','pvp',['leg'],'Carol Freeman','Lorca','Honorguard Worf','Still on the Help Center but now beaten by Hierarch crews.','','Any','Q Cannon CT','Help Center (undated)'),
+C('Mirror isolytic','pvp',['leg'],'Mirror Picard','Mirror Data','HG Worf / Carol Freeman / Mirror Kira','Defensive isolytic option.','','Any','Q Cannon CT','Scopely (pre-2026)'),
+C('Anti-crit Mirror','pvp',['leg'],'Mirror Picard','Mirror Data','Phlox or Trip Tucker','Counters Honorguard Worf crit crews.','','Any','','Scopely (pre-2026)'),
+C('Station alpha strike','station',['meta'],'Nog','Rom','VIL Winn Adami','Station raiding burst.','VIL Dukat, Kira','Any','','Scopely Nov 5 2025'),
+C('Bold Defense (5 docks)','station',['leg'],'Realta: Kras','Turas: TNG Picard / Beverly / Harrison','Jellyfish: Yuki / Marcus / Zhou','Full layout: Realta (Kras/Komal/Rukor), Turas (TNG Picard/Beverly/Harrison), Turas (Tilly/Airiam/Burnham), Jellyfish (Yuki/Marcus/Zhou), Fortunate (Gorkon/Lorca/Georgiou).','','Five docks','Shield Mitigation Floor research','Hawks (undated)'),
+C('Gorn','specific',['leg'],'Janeway','ENT-E Data','Chapel (or 5 for loot, Doc for survival)','Gorn need Isolytic damage.','SNW Chapel','Gorn Eviscerator','Tarka\'s Isolytic CT and FT','Hawks (undated)'),
+C('Silent','specific',['leg','cap'],'ENT-E Picard','ENT-E Data or 5','Trip Tucker','Pike / Moreau / Trip is capped above 71. Alt: Severus / Decius / Charvanek.','','Any','Thought Maker CT','Hawks (undated)'),
+C('Xindi Aquatic','specific',['leg'],'Archer','Trip Tucker','Phlox','Alt: T\'Pol / Sato / Shran.','','Enterprise NX-01','','Hawks (undated)'),
+C('Xindi Reptilian','specific',['leg'],'Archer','Trip Tucker','T\'Pol or Shran','','','Enterprise NX-01','','Hawks (undated)'),
+C('Swarm','specific',['leg'],'Jaylah','Kang','TNG Beverly','','','USS Franklin-A','','Hawks (undated)'),
+C('Borg probes','specific',['leg'],'2 (or Mavery)','4','Stonn or Alonzo Freeman','','','Vi\'dar Talios','','Hawks (undated)'),
+C('Eclipse armadas','specific',['leg'],'5, TNG Riker or TNG Geordi','Kirk','Spock','','','Stella','','Hawks (undated)'),
+C('Origin Sector Quantum','specific',['meta'],'Female Spock','Cat Spock','Ambassador Spock','Female Spock +300% raw Isogenite.','','FKR ship or Vengeance','Janeway\'s Antigen Bomb artifact','Scopely Update 92, Jun 25 2026'),
+C('V\'ger Fighters','specific',['meta'],'Your Excelsior crew','—','—','The Isolytic Replica refit (+50,000% Isolytic Damage) does the work.','','U.S.S. Excelsior','Isolytic Replica refit','Scopely Oct 15 2026'),
+C('Mirror Universe hostiles','specific',['leg'],'SNW James Kirk','SNW Sam Kirk','SNW Una','No 2026 source found. Rima and Vemet below decks.','Rima, Vemet','NSEA Protector','','April 2026 dashboard (unverified)'),
+C('Territory Isogenite','mining',['new'],'Mining crew','—','—','Kelcie Mae\'s refit negates officers when attacked on a node, so crew for mining stats.','','U.S.S. Kelcie Mae','Automated Defenses refit','Scopely Update 95, Sep 17 2026'),
+C('Origin Isogenite','mining',['meta'],'Female Spock','Mining officer','Mining officer','Captain bonus to Isogenite drops.','','FKR ship or Vengeance','','Scopely Update 92'),
+C('Wave Defense','wave',['new'],'Trelane','Deidamia','Chancellor Ake','Trelane +10% shield mitigation as captain; Deidamia Isolytic Cascade vs Interceptors.','','U.S.S. Athena (Duo Wave Defense)','Trelane\'s Medals artifact','Scopely Updates 91 and 94'),
+C('Impulse speed (legacy)','wave',['leg'],'ENT-E Riker','ENT-E Picard','ENT-E Data','Older speed crew.','','Any','','Hawks (undated)'),
+C('Surge','surge',['leg'],'ENT-E Riker','ENT-E Picard','ENT-E Data or SNW Una','No 2026 source. Speed between spawns matters in the 3-minute window.','','Fast G7 ship','','April 2026 dashboard (unverified)')
+];
+/* Below decks: [name, reason, must, inferred] in priority order; sp = stat order for remaining slots (general rule, inferred) */
+const HUGH=['PIC Hugh','hull repair vs hostiles',0,1],MBEN=['SNW Black Ops M\'Benga','shield health restore',0,1],CAROL=['WOK Carol','shield mitigation',0,1],PARIS=['Tom Paris','mitigation',0,1],CHAP=['SNW Chapel','Isolytic Cascade',0,1];
+const NEEL=['Neelix','Morale (since Aug swap)',1,1],TROI=['Troi','armada BD',0,0],ODO=['Odo','armada BD',0,0],TORR=['Torres','with iso artifacts',0,0];
+const PVP=[['Toryn','crit damage mitigation vs players',0,0],['Rose Harper','Iso Defense vs players, FKR/Vengeance only',0,0],['Academy Doctor or Deidamia','Interceptor or Battleship crit vs players',0,0]];
+const BD={
+'Full Planetfall':{sp:'Health > Defense > Attack',l:[['Planetfall Uhura','Polaron Ions',1,0],HUGH,MBEN,CAROL]},
+'Kirk + Sam Kirk':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,CAROL,PARIS]},
+'Pike + Planetfall Kirk':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,CAROL]},
+'Before you have PF Kirk':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,CAROL]},
+'Polaron loot':{sp:'Health > Defense > Attack',l:[['The Doctor','hostile loot drops',1,0],HUGH,MBEN]},
+'Faction-specific TNG':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,CAROL]},
+'Janeway survival':{sp:'Health > Defense > Attack',l:[['PIC Hugh','stacks with Suder healing',1,0],CHAP,MBEN,PARIS]},
+'Janeway mitigation':{sp:'Health > Defense > Attack',l:[['PIC Hugh','hull repair',0,0],['SNW Chapel','Isolytic Cascade',0,0],PARIS,CAROL]},
+'Chang crit':{sp:'Attack > Health > Defense',l:[['PIC Hugh','stacks with Suder healing',1,0],['Torres','with iso artifacts',0,0],CHAP]},
+'SNW triangle':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,CHAP]},
+'Rep slot reminder':{sp:'Health > Defense > Attack',l:[['Alonzo Freeman','rep',1,0],['Exocomps','rep',0,0],HUGH]},
+'TMP Outpost crew':{sp:'Health > Defense > Attack',l:[]},
+'TMP on FKR or Vengeance':{sp:'Health > Defense > Attack',l:[['Planetfall Scotty','Infusion Capacitors vs Outposts',1,0]]},
+'Generic outpost fallback':{sp:'Health > Defense > Attack',l:[]},
+'Open Armadas':{sp:'Attack > Health > Defense',l:[NEEL,TROI,ODO,TORR,['Harry Kim','Burning; one per armada is enough',0,1]]},
+'FKR armadas add-on':{sp:'Attack > Health > Defense',l:[['Planetfall Ortegas','Infusion Capacitors vs FKR armadas',1,0],NEEL,TROI,ODO]},
+'Chainfire':{sp:'Attack > Health > Defense',l:[NEEL,TROI,ODO,TORR,['Tom Paris','armada BD',0,0]]},
+'Damage and loot':{sp:'Attack > Health > Defense',l:[NEEL,TROI,ODO,TORR]},
+'Armada loot':{sp:'Attack > Health > Defense',l:[['VOY Doctor or Byr','loot',1,0],TROI,ODO]},
+'Krenim solo':{sp:'Health > Attack > Defense',l:[['Anti-Static or Anti-Charged Exocomp','match the Krenim type',1,0],NEEL,ODO,TROI,['PIC Hugh','hull repair',0,0]]},
+'Hierarch generalist':{sp:'Attack > Health > Defense',l:PVP},
+'Freeman counter':{sp:'Attack > Health > Defense',l:PVP},
+'Carol Freeman':{sp:'Attack > Health > Defense',l:PVP},
+'Mirror isolytic':{sp:'Defense > Health > Attack',l:[PVP[1],PVP[0]]},
+'Anti-crit Mirror':{sp:'Defense > Health > Attack',l:[['Toryn','crit damage mitigation vs players',1,0],PVP[1]]},
+'Station alpha strike':{sp:'Attack > Health > Defense',l:[['VIL Dukat','alpha strike',1,0],['Kira','alpha strike',1,0]]},
+'Bold Defense (5 docks)':{sp:'Defense > Health > Attack',l:[]},
+'Gorn':{sp:'Health > Attack > Defense',l:[['SNW Chapel','Isolytic Cascade',1,0],HUGH,TORR]},
+'Silent':{sp:'Health > Defense > Attack',l:[HUGH,MBEN,PARIS]},
+'Xindi Aquatic':{sp:'Health > Defense > Attack',l:[HUGH,MBEN]},
+'Xindi Reptilian':{sp:'Health > Defense > Attack',l:[HUGH,MBEN]},
+'Swarm':{sp:'Attack > Health > Defense',l:[HUGH,CHAP]},
+'Borg probes':{sp:'Health > Defense > Attack',l:[HUGH,CHAP]},
+'Eclipse armadas':{sp:'Attack > Health > Defense',l:[NEEL,TROI,ODO]},
+'Origin Sector Quantum':{sp:'Health > Defense > Attack',l:[['The Doctor','hostile loot drops',0,1],HUGH]},
+'V\'ger Fighters':{sp:'Attack > Health > Defense',l:[CHAP]},
+'Mirror Universe hostiles':{sp:'Health > Defense > Attack',l:[['Rima','crit while Hull Breached',1,0],['Vemet','keeps loot if destroyed',1,0]]},
+'Territory Isogenite':{sp:'Not used: refit negates officers on a node',l:[]},
+'Origin Isogenite':{sp:'Health > Defense > Attack',l:[]},
+'Wave Defense':{sp:'Health > Defense > Attack',l:[]},
+'Impulse speed (legacy)':{sp:'Health > Defense > Attack',l:[]},
+'Surge':{sp:'Attack > Health > Defense',l:[HUGH,CHAP]}
+};
+const bdHtml=c=>{const b=BD[c.name]||{sp:'Health > Defense > Attack',l:[]};
+  return `<div class="bdh"><b>Below decks</b><span>Fill rest: ${esc(b.sp)}</span></div><ol class="bd">${b.l.length?b.l.map((x,i)=>`<li class="${x[2]?'must':''} ${x[3]?'inf':''}"><i>${i+1}</i>${esc(x[0])}<small>${esc(x[1])}</small></li>`).join(''):'<li class="none">No below-decks ability confirmed for this loop. Fill by stats.</li>'}</ol>`};
+let cs=store.crew||{loop:'all',st:[],q:''};
+$('loopF').innerHTML=[['all','All loops'],...Object.entries(LOOPS)].map(([k,v])=>`<button class="chip" data-l="${k}">${v}</button>`).join('');
+$('statF').innerHTML=Object.entries(STAT).map(([k,v])=>`<button class="chip" data-s="${k}">${v[1]}</button>`).join('');
+function drawCrews(){
+  document.querySelectorAll('#loopF .chip').forEach(b=>b.classList.toggle('on',b.dataset.l===cs.loop));
+  document.querySelectorAll('#statF .chip').forEach(b=>b.classList.toggle('on',cs.st.includes(b.dataset.s)));
+  const q=cs.q.toLowerCase();
+  const list=CREWS.filter(c=>(cs.loop==='all'||c.loop===cs.loop)&&(!cs.st.length||c.st.some(s=>cs.st.includes(s)))&&(!q||Object.values(c).join(' ').toLowerCase().includes(q)));
+  $('count').textContent=`${list.length} of ${CREWS.length} crews${cs.st.length?' · status filter on':''}`;
+  $('cards').innerHTML=list.length?list.map(c=>`<article class="card crew">
+<h3>${esc(c.name)}<span class="badges">${c.st.map(s=>`<span class="b ${STAT[s][0]}">${STAT[s][1]}</span>`).join('')}</span></h3>
+<div class="loop">${LOOPS[c.loop]}</div>
+<div class="slots"><div class="slot"><span>Captain</span><b class="${c.capd?'capd':''}">${esc(c.c)}</b></div><div class="slot"><span>Officer 1</span><b>${esc(c.o1)}</b></div><div class="slot"><span>Officer 2</span><b>${esc(c.o2)}</b></div></div>
+${bdHtml(c)}
+<p>${esc(c.note)}</p>
+<details><summary>Loadout and source</summary><dl>
+${c.bd&&!(BD[c.name]?.l.length)?`<dt>Support</dt><dd>${esc(c.bd)}</dd>`:''}<dt>Ship</dt><dd>${esc(c.ship)}</dd>${c.tech?`<dt>Tech</dt><dd>${esc(c.tech)}</dd>`:''}<dt>Source</dt><dd>${esc(c.src)}</dd></dl></details>
+</article>`).join(''):'<p class="empty">No crews match. Clear a filter.</p>';
+  store.crew=cs;save();
+}
+$('loopF').addEventListener('click',e=>{const b=e.target.closest('[data-l]');if(b){cs.loop=b.dataset.l;drawCrews()}});
+$('statF').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(!b)return;const s=b.dataset.s;cs.st=cs.st.includes(s)?cs.st.filter(x=>x!==s):[...cs.st,s];drawCrews()});
+$('q').value=cs.q;$('q').addEventListener('input',e=>{cs.q=e.target.value;drawCrews()});
+
+/* ---------- Tech, changes ---------- */
+const T=(n,t,d,u)=>`<article class="card"><h3>${n}</h3><div class="loop">${t}</div><p style="font-size:15px">${d}</p><p class="hint" style="margin:0"><b style="color:var(--fed2)">Use:</b> ${u}</p></article>`;
+$('techCards').innerHTML=[
+T('Infusion Modulator','Prototype Forbidden Tech · FKR/Vengeance vs FKR hostiles','Infusion Capacitors (up to about 15,000), weapon damage, crit damage, base loot. The Help Center calls an Epic FT "Polaron Modulator"; likely the same item, confirm in game.','Every Polaron and FKR rep grind ship.'),
+T('Silicon-based Parasites','Epic Chaos Tech · FKR/Vengeance only','Weapon damage vs Solo Outposts and Retaliation (up to about 1,200%) and more Basic and Elite Outpost Credits. From the Pinnacle Meta and Outbreak Refinery.','Outpost dock on Vengeance or FKR ship.'),
+T('Neural Neutralizer','Prototype Tech · any ship','Crit chance, mitigation and base damage vs Outposts; Apex Barrier vs Node Outposts. Shards from the Signal Observatory.','Every Outpost loadout.'),
+T('Thought Maker','Chaos Tech · general hostiles','Stacking Apex Barrier and +20% loot vs non-armada hostiles.','Standard G7 and Breen crews.'),
+T('Entropic Warhead','Chaos Tech · hostiles and armadas','85% chance of Hull Breach each round; frees a bridge slot.','Chang crit crew, armadas.'),
+T('Q Cannon','Chaos Tech · PvP','Cuts enemy weapon and crit damage, raises your base damage vs players.','Hierarch and Mirror PvP crews.'),
+T('Tarka\'s Isolytic Weapon','Chaos Tech and FT · isolytic','Stacking Isolytic Cascade vs non-armada hostiles; Gorn bonuses.','Gorn Eviscerator.'),
+T('Metreon Cascade Warhead','Forbidden Tech · hostile crits','Crit damage vs non-armada hostiles.','Standard G7 hostile ships.'),
+T('Unnamed 2026 techs','Update 92 Prototype FT, Update 91.1 Chaos Tech','Names not captured in research.','Check stfc.space.')
+].join('');
+$('artCards').innerHTML=[
+T('Kirk\'s Spectacles','Outposts','Up to 7,500 Apex Barrier vs Outposts and Retaliation, fleet-wide.','Outpost docks.'),
+T('Picard\'s Earl Grey Tea Cup','Outposts','Up to +300% Isolytic Damage vs Outposts and Retaliation.','Outpost docks.'),
+T('Benny Russell\'s Typewriter','Outposts','Up to +150% Solo and Elite Outpost Credits.','Credit farming.'),
+T('Janeway\'s Antigen Bomb','Origin Sector','Loot boost.','Female Spock crew.'),
+T('Trelane\'s Medals','Wave Defense','Up to 400,000 Critical Mitigation vs Academy drones.','Athena.'),
+T('Vulcan Ka\'athyra','Polaron Strongholds','Up to 12% Hyperthermic Decay, first round only. From three weekly Polaron Initiation events.','Server Boss from December 3.')
+].join('');
+$('anom').innerHTML=['Combat Zone Consequences: more base Infusion Capacitors, but less loot and higher rep losses. Avoid for rep.','Rich Anomalies: better for grinding.','From the Shadows, Nov 29 to Dec 1: +200% Infusion Spike for 1 round while cloaked.','Kirk\'s Strike, Ortegas\' Volley, Scotty\'s Barrage, Uhura\'s Salvo: PvP only, with that Planetfall officer aboard.','July set: Adaptive Hulls, Faction Amity, Disrupted Energy Shields, Ripple of Violence, Isolytic Oversurge, Technological Advancement, Anti-Barrier Innovations, Assimilation.'].map(x=>`<li>${x}</li>`).join('');
+$('chg').innerHTML=['Polaron and Infusion damage (Nov 12). Polaron hostiles need Infusion damage on an FKR ship or the Vengeance.','Planetfall officer group and a Season Recruit that replaced Paragon Recruit (one Epic guaranteed within 90 pulls).','Haven planetary base (Sep 17) and the Stadium: +250% FKR rep at level 1, +400% at 3, +1,500% at 10.','Outposts: Sulu crew stays; Kirk\'s Spectacles adds Apex Barrier; Silicon-based Parasites and PF Scotty below decks for FKR/Vengeance.','Open Armadas: FCM Data / Cochrane / Mara Dalen is the official crew.','PvP: Hierarch timing fix, Shield Mitigation Floor stat, station crit mitigation Primes, four new below-decks options.','Neelix and Harry Kim swapped abilities (Aug). Academy Doctor values doubled (May). No new G7 caps.','Polaron War Strongholds server boss starts December 3; needs 100% Hyperthermic Decay server-wide.'].map(x=>`<li>${x}</li>`).join('');
+$('offs').innerHTML=[['Update 90 (May)','Academy Doctor, Caleb Mir, Genesis Lythe, Jahl of Myr','Academy; Doctor for PvP Interceptor crit'],['Update 91','Chancellor Ake, Deidamia','Wave Defense; Deidamia PvP Battleship crit below decks'],['Update 92 (Jun 25)','Female Spock, Ambassador Spock, Cat Spock','Origin Sector and Territory Capture'],['Update 94 (Aug 20)','Toryn, Trelane, WOK McCoy','Reaver raiding, PvP crit mitigation, Wave Defense'],['Division 12 (Oct 15)','Rose Harper','Reaver Dilithium raiding; PvP Isolytic Defense'],['Season 1 Ep 1 (Nov 12)','Planetfall Kirk, Ortegas, Scotty, Uhura','Polaron and Infusion FKR content']].map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+
+/* ---------- Rep planner ---------- */
+const STAD=[0,250,325,400,557,714,871,1029,1186,1343,1500],KNOWN=new Set([0,1,3,10]);
+const FN={fed:'Federation',kli:'Klingon',rom:'Romulan'};
+const ROUTE={
+ fed:{p:'kli',s:'rom',x:'fed',inf:false,note:'Klingon Polaron kills pay Federation Plaudits and mainly raise Federation rep.'},
+ kli:{p:'rom',s:'fed',x:'kli',inf:true,note:'Romulan Polaron kills pay Klingon Plaudits.'},
+ rom:{p:'fed',s:'kli',x:'rom',inf:true,note:'Klingon Polaron kills give a smaller Romulan gain.'}};
+const others=f=>Object.keys(FN).filter(k=>k!==f);
+const sample=f=>{const r=ROUTE[f],[a,b]=others(f);return{goal:f==='fed'?'2.1T':'1T',tdate:'',prim:'pol1',cGain:'',cKills:'',cRow:'pol1',rows:[
+ {id:'pol1',name:`${FN[r.p]} Polaron hostiles`,note:r.note,inf:r.inf&&f==='rom',per:'2M',qty:400,period:'day',boost:true,kill:true,on:true},
+ {id:'pol2',name:`${FN[r.s]} Polaron hostiles`,note:'Smaller gain.',inf:f!=='fed',per:'500K',qty:0,period:'day',boost:true,kill:true,on:false},
+ {id:'std',name:`Standard ${FN[a]} and ${FN[b]} hostiles`,note:'Veil and Margins, non-Polaron.',per:'1.5M',qty:300,period:'day',boost:true,kill:true,on:true},
+ {id:'plaud',name:`Outbreak Refinery ${FN[f]} rep bundles`,note:`Bought with ${FN[f]} Plaudits.`,per:'5B',qty:7,period:'week',boost:false,kill:false,on:true},
+ {id:'outp',name:`Elite Solo Outpost ${FN[f]} rep bundle`,note:'G7 variant unlocks at Ops 73.',per:'3B',qty:1,period:'day',boost:false,kill:false,on:true},
+ {id:'daily',name:'Daily goals and faction dailies',note:'',per:'2B',qty:1,period:'day',boost:false,kill:false,on:true},
+ {id:'evt',name:'Faction Reputation Events',note:'',per:'4B',qty:1,period:'day',boost:false,kill:false,on:true},
+ {id:'arm',name:'FKR armadas',note:'',per:'200M',qty:5,period:'day',boost:false,kill:false,on:true},
+ {id:'store',name:'Faction and Maverick store rep',note:'',per:'10B',qty:1,period:'week',boost:false,kill:false,on:true}]}};
+let R=store.rep;
+if(!R||!R.fac)R={fac:'fed',stad:3,stadO:'',elig:true,other:0,stack:'add',cap:2500,f:{}};
+for(const f in FN)if(!R.f[f])R.f[f]=sample(f);
+const F=()=>R.f[R.fac];
+const parseAmt=s=>{const m=String(s??'').trim().replace(/,/g,'').toUpperCase().match(/^(\d*\.?\d+)\s*([KMBT]?)$/);return m?parseFloat(m[1])*{'':1,K:1e3,M:1e6,B:1e9,T:1e12}[m[2]]:NaN};
+const fmt=n=>{if(!isFinite(n))return'—';const a=Math.abs(n);for(const[v,u]of[[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']])if(a>=v){const x=n/v;return parseFloat(x.toFixed(x>=100?0:x>=10?1:2))+u}return String(Math.round(n))};
+const stadPct=l=>{if(!R.elig)return 0;const o=parseFloat(R.stadO);return l===R.stad&&R.stadO!==''&&isFinite(o)?o:STAD[l]};
+const mult=(r,sp)=>{if(!r.boost)return 1;const o=parseFloat(R.other)||0;return R.stack==='mul'?(1+sp/100)*(1+o/100):1+(sp+o)/100};
+const perDay=r=>(+r.qty||0)/(r.period==='week'?7:1);
+const rowDay=(r,sp)=>{const p=parseAmt(r.per);return r.on&&isFinite(p)?p*perDay(r)*mult(r,sp):0};
+const total=l=>{const sp=stadPct(l);return F().rows.reduce((t,r)=>t+rowDay(r,sp),0)};
+$('stad').innerHTML=STAD.map((p,i)=>`<option value="${i}">Level ${i}${i?` · +${p.toLocaleString()}%${KNOWN.has(i)?'':' est.'}`:' · none'}</option>`).join('');
+
+function drawRows(){
+  const D=F();
+  $('rows').innerHTML=D.rows.map((r,i)=>`<tr data-i="${i}"><td><input type="checkbox" data-k="on" ${r.on?'checked':''} aria-label="Use this source"></td>
+<td>${r.custom?`<input data-k="name" value="${esc(r.name)}" aria-label="Source name">`:`<b>${esc(r.name)}</b>`}${r.kill?'<span class="tag">kills</span>':''}${r.inf?'<span class="tag inf">inferred</span>':''}${r.note?`<small>${esc(r.note)}</small>`:''}</td>
+<td><input data-k="per" value="${esc(r.per)}" inputmode="decimal" aria-label="Rep each"></td>
+<td><input data-k="qty" type="number" min="0" step="1" value="${esc(r.qty)}" aria-label="Count"></td>
+<td><select data-k="period" aria-label="Period"><option value="day"${r.period==='day'?' selected':''}>day</option><option value="week"${r.period==='week'?' selected':''}>week</option></select></td>
+<td><input type="checkbox" data-k="boost" ${r.boost?'checked':''} aria-label="Stadium and hostile bonuses apply"></td>
+<td class="num" data-out></td><td>${r.custom?'<button data-del>Remove</button>':''}</td></tr>`).join('');
+  $('prim').innerHTML=D.rows.filter(r=>r.kill).map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');$('prim').value=D.prim;
+  $('cRow').innerHTML=D.rows.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');$('cRow').value=D.cRow;
+}
+function syncRep(){
+  const D=F();
+  document.querySelectorAll('#fac button').forEach(b=>b.classList.toggle('on',b.dataset.f===R.fac));
+  $('goal').value=D.goal;$('stad').value=R.stad;$('stadO').value=R.stadO;$('elig').checked=R.elig;$('other').value=R.other;$('stack').value=R.stack;$('cap').value=R.cap;
+  $('tdate').value=D.tdate;$('cGain').value=D.cGain;$('cKills').value=D.cKills;
+  $('setupH').textContent=`${FN[R.fac]} setup`;$('routeH').textContent=`${FN[R.fac]} routing rules`;
+  const ro=ROUTE[R.fac],inf=ro.inf?' <span class="tag inf">inferred</span>':'';
+  $('route').innerHTML=[`Best kills: <b>${FN[ro.p]} Polaron hostiles</b>.${R.fac==='rom'?inf:''}`,`Smaller gain: ${FN[ro.s]} Polaron hostiles.${R.fac==='kli'?inf:''}`,`<span class="warn">Never farm ${FN[ro.x]} Polaron hostiles: they lower ${FN[R.fac]} rep.</span>${R.fac==='rom'?inf:''}`,`Spend ${FN[R.fac]} Plaudits on Outbreak Refinery rep bundles. Lower grades convert at 100:1.`,'Polaron hostiles need Infusion damage: FKR ship or Vengeance with Planetfall Kirk / Ortegas / Scotty and Uhura below decks.','Avoid Combat Zone systems for rep; grind core FKR space or Anomaly systems.','Stadium shards after the Pinnacle Meta come only from Season 1 Chase Meta events.'].map(x=>`<li>${x}</li>`).join('');
+}
+function calc(){
+  const D=F(),goal=parseAmt(D.goal),sp=stadPct(R.stad),day=total(R.stad),days=goal/day;
+  const ok=isFinite(days)&&day>0;
+  $('days').innerHTML=`${ok?Math.ceil(days).toLocaleString():'—'}<small>days</small>`;
+  $('eta').textContent=ok?`${FN[R.fac]} goal around ${new Date(Date.now()+Math.ceil(days)*864e5).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})} at this pace. Stadium adds +${sp.toLocaleString()}% to boosted sources.`:'Enter the rep you still need and at least one source.';
+  $('perDay').textContent=fmt(day);$('perWeek').textContent=fmt(day*7);
+  const kills=D.rows.filter(r=>r.on&&r.kill).reduce((t,r)=>t+perDay(r),0);
+  $('kills').textContent=Math.round(kills).toLocaleString();
+  document.querySelectorAll('#rows tr').forEach(tr=>{tr.querySelector('[data-out]').textContent=fmt(rowDay(D.rows[+tr.dataset.i],sp))});
+  const parts=D.rows.map(r=>({r,v:rowDay(r,sp)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v),max=parts[0]?.v||1;
+  $('bars').innerHTML=parts.map(x=>`<div class="bar"><span>${esc(x.r.name)}</span><i class="${x.r.kill?'k':''}" style="width:${(x.v/max*100).toFixed(1)}%"></i><em>${Math.round(x.v/day*100)}%</em></div>`).join('');
+  if(R.stad>=10)$('next').innerHTML='Stadium is maxed at +1,500%.';
+  else if(!R.elig)$('next').innerHTML='<span class="warn">Stadium bonus is off: you are not on an FKR ship or the Vengeance.</span>';
+  else{const d2=total(R.stad+1),days2=goal/d2;$('next').innerHTML=`<b>Stadium level ${R.stad+1}</b> adds ${fmt(d2-day)} a day and saves about <b>${isFinite(days-days2)?Math.max(0,Math.round(days-days2)):'—'} days</b>${KNOWN.has(R.stad+1)?'':' (estimated level value)'}.`}
+  $('stadHint').textContent=KNOWN.has(R.stad)?'Confirmed value.':'Estimated between confirmed levels 1, 3 and 10. Enter your in-game % in the override.';
+  /* solver */
+  const out=$('solve');
+  if(!D.tdate)out.textContent='Pick a date to see the kills a day you need.';
+  else{const left=Math.ceil((new Date(D.tdate+'T23:59:59')-Date.now())/864e5);
+    if(!(left>0))out.textContent='Pick a date in the future.';
+    else{const need=goal/left,gap=need-day;
+      if(gap<=0)out.innerHTML=`You need ${fmt(need)} a day and make ${fmt(day)}. About ${Math.max(0,left-Math.ceil(days))} days to spare.`;
+      else{const r=D.rows.find(x=>x.id===D.prim),per=r?parseAmt(r.per)*mult(r,sp):NaN,extra=Math.ceil(gap/per);
+        out.innerHTML=`You need ${fmt(need)} a day over ${left} days, ${fmt(gap)} more than now: about <b>${isFinite(extra)?extra.toLocaleString():'—'} more ${r?esc(r.name):'kills'}</b> a day.`+(isFinite(extra)&&+R.cap&&kills+extra>+R.cap?` <span class="warn">That is ${Math.round(kills+extra).toLocaleString()} kills a day, over your cap. Lean on refinery bundles or the next Stadium level.</span>`:'')}}}
+  /* calibrator */
+  const g=parseAmt(D.cGain),k=+D.cKills,cr=D.rows.find(x=>x.id===D.cRow);
+  if(cr&&g>0&&k>0){const m=mult(cr,sp),base=g/k/m;$('cOut').innerHTML=`${fmt(g/k)} per kill with bonuses (x${m.toFixed(2)}). Base: <b>${fmt(base)}</b>.`;$('cApply').disabled=false;$('cApply').dataset.v=fmt(base)}
+  else{$('cOut').textContent='Enter rep gained and kills.';$('cApply').disabled=true}
+  /* recs */
+  const L=[],on=id=>D.rows.find(r=>r.id===id&&r.on&&perDay(r)>0);
+  if(!R.elig)L.push('<span class="warn">Move the grind onto an FKR ship or the Vengeance; without it the Stadium bonus is zero.</span>');
+  if(R.stad<3)L.push('Finish the 28-day Pinnacle Meta for Stadium level 3 (+400%).');
+  if(R.stad<10&&R.elig)L.push(`Your next Stadium level is worth ${fmt(total(R.stad+1)-day)} a day. Prioritize Chase Meta events for shards.`);
+  if(+R.cap&&kills>+R.cap)L.push(`<span class="warn">Planned kills (${Math.round(kills).toLocaleString()}) are over your cap.</span>`);
+  else if(+R.cap&&kills<R.cap*0.8)L.push(`Room for about ${Math.round(R.cap-kills).toLocaleString()} more kills a day. ${FN[ROUTE[R.fac].p]} Polaron hostiles are the best use.`);
+  if(!on('plaud'))L.push(`Spend ${FN[R.fac]} Plaudits in the Outbreak Refinery.`);
+  if(!on('outp'))L.push(`The G7 Elite Solo Outpost ${FN[R.fac]} rep bundle unlocks at Ops 73.`);
+  L.push('Check the system panel before warping in. Combat Zone systems raise rep losses.');
+  $('recs').innerHTML=L.map(x=>`<li>${x}</li>`).join('');
+  store.rep=R;save();
+}
+$('fac').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;R.fac=b.dataset.f;drawRows();syncRep();calc()});
+const g=(id,k,num)=>$(id).addEventListener('input',e=>{R[k]=num?(e.target.value===''?'':+e.target.value):e.target.value;calc()});
+const gf=(id,k)=>$(id).addEventListener('input',e=>{F()[k]=e.target.value;calc()});
+g('stadO','stadO');g('other','other');g('cap','cap',true);gf('goal','goal');gf('tdate','tdate');gf('cGain','cGain');gf('cKills','cKills');
+$('stad').addEventListener('change',e=>{R.stad=+e.target.value;R.stadO='';$('stadO').value='';calc()});
+$('elig').addEventListener('change',e=>{R.elig=e.target.checked;calc()});
+$('stack').addEventListener('change',e=>{R.stack=e.target.value;calc()});
+$('prim').addEventListener('change',e=>{F().prim=e.target.value;calc()});
+$('cRow').addEventListener('change',e=>{F().cRow=e.target.value;calc()});
+$('cApply').addEventListener('click',()=>{const r=F().rows.find(x=>x.id===F().cRow);if(r&&$('cApply').dataset.v){r.per=$('cApply').dataset.v;drawRows();calc()}});
+const onRow=e=>{const tr=e.target.closest('tr[data-i]'),k=e.target.dataset.k;if(!tr||!k)return;const r=F().rows[+tr.dataset.i];r[k]=e.target.type==='checkbox'?e.target.checked:(k==='qty'?(+e.target.value||0):e.target.value);calc()};
+$('rows').addEventListener('input',onRow);$('rows').addEventListener('change',onRow);
+$('rows').addEventListener('click',e=>{if(!e.target.closest('[data-del]'))return;F().rows.splice(+e.target.closest('tr').dataset.i,1);drawRows();calc()});
+$('add').addEventListener('click',()=>{F().rows.push({id:'c'+Date.now(),name:'Custom source',note:'',per:'1B',qty:1,period:'day',boost:false,kill:false,on:true,custom:true});drawRows();calc()});
+$('reset').addEventListener('click',()=>{R.f[R.fac]=sample(R.fac);drawRows();syncRep();calc()});
+
+/* ---------- Routing ---------- */
+const VIEWS=['crews','rep','tech','changes'];
+function route(){const v=VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'crews';
+  VIEWS.forEach(x=>$('v-'+x).classList.toggle('on',x===v));
+  document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+v))}
+addEventListener('hashchange',route);
+drawCrews();drawRows();syncRep();calc();route();
+}
+</script>
+</body>
+</html>
